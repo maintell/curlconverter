@@ -1,12 +1,6 @@
-request = %HTTPoison.Request{
-  method: :post,
-  url: "http://localhost:28139/targetservice",
-  options: [],
-  headers: [],
-  params: [],
-  body: {:multipart, [
-    {:file, ~s|image.jpg|}
-]}
-}
-
-response = HTTPoison.request(request)
+response = HTTPoison.post!(
+  "http://localhost:28139/targetservice",
+  {:multipart, [
+    {:file, "image.jpg", {"form-data", [{:name, "image"}, {:filename, Path.basename("image.jpg")}]}, []}
+  ]}
+)

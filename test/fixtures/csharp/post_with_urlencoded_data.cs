@@ -1,6 +1,10 @@
+using System.Net.Http;
 using System.Net.Http.Headers;
 
-HttpClient client = new HttpClient();
+HttpClientHandler handler = new HttpClientHandler();
+handler.AutomaticDecompression = DecompressionMethods.All;
+
+HttpClient client = new HttpClient(handler);
 
 HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, "http://localhost:28139/echo/html/");
 

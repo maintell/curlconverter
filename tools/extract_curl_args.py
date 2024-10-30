@@ -5,7 +5,6 @@
 # two JS objects (one for --long-options and one for -s (short) options)
 # to ../src/util.ts.
 #
-# curl defines its arguments in src/tool_getparam.c:
 # https://github.com/curl/curl/blob/master/src/tool_getparam.c#L72
 #
 # Each argument definition is composed of
@@ -16,15 +15,14 @@
 # second argument or not.
 #   ARG_STRING, ARG_FILENAME - consume a second argument
 #   ARG_BOOL, ARG_NONE - don't consume a second argument.
-# Historically, TRUE and FALSE were used.
+#   TRUE / FALSE - no longer used
+# ARG_BOOL arguments get a --no-<lname> counterpart. ARG_NONE arguments do not.
 #
-# Each boolean argument (ARG_BOOL) also gets a --no-OPTION-NAME
-# counterpart. ARG_NONE arguments do not.
-#
-# Multiple options can have the same `letter` if an option was renamed but
-# the old name needs to also be kept for backwards compatibility. To these
-# options we add a "name" property with the newest name.
+# Options can have the same `letter` when an option was renamed but
+# the old name was also kept for backwards compatibility.
+# We add a "name" property with the newest name to these options.
 
+import argparse
 import json
 import subprocess
 import sys
@@ -32,7 +30,6 @@ from collections import Counter
 from pathlib import Path
 
 # Git repo of curl's source code to extract the args from
-# TODO: make this an optional command line arg
 CURL_REPO = Path(__file__).parent.parent / "curl"
 
 OLD_INPUT_FILE = CURL_REPO / "src" / "main.c"
@@ -59,10 +56,12 @@ STR_TYPES = ["string", "filename"]
 ALIAS_TYPES = BOOL_TYPES + STR_TYPES
 RAW_ALIAS_TYPES = ALIAS_TYPES + ["true", "false"]
 
-OUTPUT_FILE = Path(__file__).parent.parent / "src" / "util.ts"
+OUTPUT_FILE = Path(__file__).parent.parent / "src" / "curl" / "opts.ts"
 
-JS_PARAMS_START = "BEGIN GENERATED CURL OPTIONS"
-JS_PARAMS_END = "END GENERATED CURL OPTIONS"
+JS_PARAMS_START = "BEGIN EXTRACTED OPTIONS"
+JS_PARAMS_END = "END EXTRACTED OPTIONS"
+JS_SHORT_PARAMS_START = "BEGIN EXTRACTED SHORT OPTIONS"
+JS_SHORT_PARAMS_END = "END EXTRACTED SHORT OPTIONS"
 
 PACKAGE_JSON = Path(__file__).parent.parent / "package.json"
 CLI_FILE = Path(__file__).parent.parent / "src" / "cli.ts"
@@ -71,40 +70,74 @@ CLI_VERSION_LINE_START = "const VERSION = "
 # These are options with the same `letter`, which are options that were
 # renamed, along with their new name.
 DUPES = {
-    "krb": "krb",
     "krb4": "krb",
     "ftp-ssl": "ssl",
-    "ssl": "ssl",
     "ftp-ssl-reqd": "ssl-reqd",
-    "ssl-reqd": "ssl-reqd",
-    "proxy-service-name": "proxy-service-name",
     "socks5-gssapi-service": "proxy-service-name",
     # These argument names have been deleted,
     # they should appear as deleted options.
-    "request": "request",
     "http-request": "request",
-    "use-ascii": "use-ascii",
     "ftp-ascii": "use-ascii",
     "ftpport": "ftp-port",
-    "ftp-port": "ftp-port",
     "socks": "socks5",
-    "socks5": "socks5",
 }
+for value in list(DUPES.values()):
+    DUPES[value] = value
+
+
+parser = argparse.ArgumentParser(
+    prog="extract_curl_args",
+    description="extract a list of curl's arguments from its source code into a JavaScript file",
+)
+parser.add_argument("repo_dir", nargs="?", default=CURL_REPO, type=Path)
+parser.add_argument(
+    "-w",
+    "--write",
+    action="store_true",
+    help="write changes to " + str(OUTPUT_FILE) + " and " + str(CLI_FILE),
+)
+args = parser.parse_args()
+
+
+def is_git_repo(git_dir=args.repo_dir):
+    result = subprocess.run(
+        ["git", "rev-parse", "--is-inside-work-tree"],
+        cwd=git_dir,
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0 and result.stdout.strip() == "true"
+
 
 if not OUTPUT_FILE.is_file():
     sys.exit(
         f"{OUTPUT_FILE} doesn't exist. You should run this script from curlconverter/"
     )
-if not CURL_REPO.is_dir():
+if not args.repo_dir.is_dir():
     sys.exit(
-        f"{CURL_REPO} needs to be a git repo with curl's source code. "
+        f"{args.repo_dir} needs to be a git repo with curl's source code. "
         "You can clone it with\n\n"
         "git clone https://github.com/curl/curl ../curl"
-        # or modify the CURL_REPO variable above
+        # or modify the args.repo_dir variable above
     )
+if not is_git_repo(args.repo_dir):
+    sys.exit(f"{args.repo_dir} is not a git repo")
 
 
-def git_branch(git_dir=CURL_REPO):
+def git_pull(git_dir=args.repo_dir):
+    return subprocess.run(
+        ["git", "pull"],
+        cwd=git_dir,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+
+
+git_pull()
+
+
+def git_branch(git_dir=args.repo_dir):
     branch = subprocess.run(
         ["git", "rev-parse", "--abbrev-ref", "HEAD"],
         cwd=git_dir,
@@ -113,16 +146,6 @@ def git_branch(git_dir=CURL_REPO):
         text=True,
     ).stdout
     return branch.strip()
-
-
-def is_git_repo(git_dir=CURL_REPO):
-    result = subprocess.run(
-        ["git", "rev-parse", "--is-inside-work-tree"],
-        cwd=git_dir,
-        capture_output=True,
-        text=True,
-    )
-    return result.returncode == 0 and result.stdout.strip() == "true"
 
 
 def parse_aliases(lines):
@@ -193,6 +216,7 @@ def fill_out_aliases(aliases, add_no_options=True, assumptions=set()):
                     print(assumption, file=sys.stderr)
                 alias["name"] = without_no
 
+        alias["name"] = alias["lname"]
         if letter_count[alias["letter"]] > 1:
             # Raise KeyError if special case hasn't been added yet
             candidate = DUPES[alias["lname"]]
@@ -243,27 +267,27 @@ def split(aliases):
     return long_args, short_args
 
 
-def format_as_js(d, var_name, indent="\t", indent_level=0):
-    yield f"{indent * indent_level}const {var_name} = {{"
+def format_as_js(d, indent="  ", indent_level=0):
     for top_key, opt in d.items():
 
         def quote(key):
-            return key if key.isalpha() else repr(key)
+            return json.dumps(key, ensure_ascii=False)
 
         def val_to_js(val):
             if isinstance(val, str):
-                return repr(val)
+                return quote(val)
             if isinstance(val, bool):
                 return str(val).lower()
             raise TypeError(f"can't convert values of type {type(val)} to JS")
 
         if isinstance(opt, dict):
-            vals = [f"{quote(k)}: {val_to_js(v)}" for k, v in opt.items()]
-            yield f"{indent * (indent_level + 1)}{top_key!r}: {{{', '.join(vals)}}},"
+            vals = [
+                f"{k if k.isalpha() else quote(k)}: {val_to_js(v)}"
+                for k, v in opt.items()
+            ]
+            yield f"{indent * (indent_level + 1)}{quote(top_key)}: {{ {', '.join(vals)} }},"
         elif isinstance(opt, str):
-            yield f"{indent * (indent_level + 1)}{top_key!r}: {val_to_js(opt)},"
-
-    yield (indent * indent_level) + "};"
+            yield f"{indent * (indent_level + 1)}{quote(top_key)}: {val_to_js(opt)},"
 
 
 def parse_tag(tag):
@@ -286,7 +310,7 @@ def parse_tag(tag):
     return int(major), int(minor), int(patch)
 
 
-def curl_tags(git_dir=CURL_REPO):
+def curl_tags(git_dir=args.repo_dir):
     tags = (
         subprocess.run(
             ["git", "tag"],
@@ -303,7 +327,7 @@ def curl_tags(git_dir=CURL_REPO):
             yield tag
 
 
-def file_at_commit(filename, commit_hash, git_dir=CURL_REPO):
+def file_at_commit(filename, commit_hash, git_dir=args.repo_dir):
     contents = subprocess.run(
         ["git", "cat-file", "-p", f"{commit_hash}:{filename}"],
         cwd=git_dir,
@@ -319,10 +343,10 @@ def file_at_commit(filename, commit_hash, git_dir=CURL_REPO):
 
 if __name__ == "__main__":
     # TODO: check that repo is up to date
-    if not is_git_repo(CURL_REPO):
-        sys.exit(f"{CURL_REPO} is not a git repo")
+    if not is_git_repo(args.repo_dir):
+        sys.exit(f"{args.repo_dir} is not a git repo")
 
-    tags = sorted(curl_tags(CURL_REPO), key=parse_tag)
+    tags = sorted(curl_tags(args.repo_dir), key=parse_tag)
 
     aliases = {}
     short_aliases = {}
@@ -426,26 +450,36 @@ if __name__ == "__main__":
     )
     long_args, short_args = split(current_aliases)
 
-    js_params_lines = list(format_as_js(long_args, "curlLongOpts", indent="  "))
-    js_params_lines += [""]  # separate by a newline
-    js_params_lines += list(format_as_js(short_args, "curlShortOpts", indent="  "))
+    js_params_lines = list(format_as_js(long_args))
+    js_short_params_lines = list(format_as_js(short_args))
 
     new_lines = []
     with open(OUTPUT_FILE) as f:
-        for line in f:
-            new_lines.append(line)
-            if JS_PARAMS_START in line:
-                break
-        else:
-            raise ValueError(f"{'// ' + JS_PARAMS_START!r} not in {OUTPUT_FILE}")
 
-        new_lines += [l + "\n" for l in js_params_lines]
-        for line in f:
-            if JS_PARAMS_END in line:
+        def add_between(f, new_lines, adding_lines, start, end):
+            for line in f:
                 new_lines.append(line)
-                break
-        else:
-            raise ValueError(f"{'// ' + JS_PARAMS_END!r} not in {OUTPUT_FILE}")
+                if start in line:
+                    break
+            else:
+                raise ValueError(f"{'// ' + start!r} not in {OUTPUT_FILE}")
+
+            new_lines += [l + "\n" for l in adding_lines]
+            for line in f:
+                if end in line:
+                    new_lines.append(line)
+                    break
+            else:
+                raise ValueError(f"{'// ' + end!r} not in {OUTPUT_FILE}")
+
+        add_between(f, new_lines, js_params_lines, JS_PARAMS_START, JS_PARAMS_END)
+        add_between(
+            f,
+            new_lines,
+            js_short_params_lines,
+            JS_SHORT_PARAMS_START,
+            JS_SHORT_PARAMS_END,
+        )
         for line in f:
             new_lines.append(line)
 
@@ -454,7 +488,7 @@ if __name__ == "__main__":
     with open(PACKAGE_JSON) as f:
         package_version = json.load(f)["version"]
     cli_version = f"{package_version} (curl {curl_version})"
-    cli_version_line = CLI_VERSION_LINE_START + repr(cli_version) + "\n"
+    cli_version_line = CLI_VERSION_LINE_START + f'"{cli_version}";\n'
     with open(CLI_FILE) as f:
         for line in f:
             if line.strip().startswith(CLI_VERSION_LINE_START):
@@ -470,7 +504,8 @@ if __name__ == "__main__":
         for line in f:
             new_cli_lines.append(line)
 
-    # with open(OUTPUT_FILE, "w", newline="\n") as f:
-    #     f.write("".join(new_lines))
-    # with open(CLI_FILE, "w", newline="\n") as f:
-    #     f.write("".join(new_cli_lines))
+    if args.write:
+        with open(OUTPUT_FILE, "w", newline="\n") as f:
+            f.write("".join(new_lines))
+        with open(CLI_FILE, "w", newline="\n") as f:
+            f.write("".join(new_cli_lines))

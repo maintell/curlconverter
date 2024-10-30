@@ -1,53 +1,39 @@
-import * as util from "../../util.js";
-import type { Request, Warnings } from "../../util.js";
+import { parse, getFirst, COMMON_SUPPORTED_ARGS } from "../../parse.js";
+import type { Request, Warnings } from "../../parse.js";
 
 import { toWebServices } from "./webservices.js";
 import { toHTTPInterface } from "./httpinterface.js";
 
-const supportedArgs = new Set([
-  "url",
-  "request",
-  "user-agent",
-  "cookie",
-  "data",
-  "data-raw",
-  "data-ascii",
-  "data-binary",
-  "data-urlencode",
-  "json",
-  "referer",
-  "form",
-  "form-string",
-  "get",
-  "header",
-  "head",
-  "no-head",
+export const supportedArgs = new Set([
+  ...COMMON_SUPPORTED_ARGS,
   "insecure",
   "no-insecure",
-  "user",
+  "form",
+  "form-string",
 ]);
 
-export const _toMATLAB = (
-  request: Request,
-  warnings: Warnings = []
-): string => {
-  let webServicesLines, httpInterfaceLines;
-  [webServicesLines, warnings] = toWebServices(request, warnings);
-  [httpInterfaceLines, warnings] = toHTTPInterface(request, warnings);
+export function _toMATLAB(
+  requests: Request[],
+  warnings: Warnings = [],
+): string {
+  const request = getFirst(requests, warnings);
+
+  const [webServicesLines] = toWebServices(request, warnings);
+  const [httpInterfaceLines] = toHTTPInterface(request, warnings);
   const lines = webServicesLines.concat("", httpInterfaceLines);
   return lines
     .flat()
     .filter((line) => line !== null)
     .join("\n");
-};
-export const toMATLABWarn = (
+}
+export function toMATLABWarn(
   curlCommand: string | string[],
-  warnings: Warnings = []
-): [string, Warnings] => {
-  const request = util.parseCurlCommand(curlCommand, supportedArgs, warnings);
-  const matlab = _toMATLAB(request, warnings);
+  warnings: Warnings = [],
+): [string, Warnings] {
+  const requests = parse(curlCommand, supportedArgs, warnings);
+  const matlab = _toMATLAB(requests, warnings);
   return [matlab, warnings];
-};
-export const toMATLAB = (curlCommand: string | string[]): string => {
+}
+export function toMATLAB(curlCommand: string | string[]): string {
   return toMATLABWarn(curlCommand)[0];
-};
+}

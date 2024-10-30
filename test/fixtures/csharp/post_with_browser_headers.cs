@@ -1,4 +1,9 @@
-HttpClient client = new HttpClient();
+using System.Net.Http;
+
+HttpClientHandler handler = new HttpClientHandler();
+handler.AutomaticDecompression = DecompressionMethods.All;
+
+HttpClient client = new HttpClient(handler);
 
 HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, "http://localhost:28139/ajax/demo_post.asp");
 

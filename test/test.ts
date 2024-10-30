@@ -15,12 +15,11 @@ import type { Converter } from "./test-utils.js";
 // we get a list of all input files, iterate over it, and if an
 // output file exists, compare the output.
 const curlCommandsDir = path.resolve(fixturesDir, "curl_commands");
-console.log(curlCommandsDir);
 
 const testArgs = await yargs(hideBin(process.argv))
   .scriptName("test.js")
   .usage(
-    "Usage: $0 [--language <language>] [--test <test_name>] [test_name...]"
+    "Usage: $0 [--language <language>] [--test <test_name>] [test_name...]",
   )
   .option("l", {
     alias: "language",
@@ -60,7 +59,7 @@ const testFileNames =
         t
           .toString()
           .replace(/ /g, "_")
-          .replace(/(\.sh)?$/, ".sh")
+          .replace(/(\.sh)?$/, ".sh"),
       )
     : fs.readdirSync(curlCommandsDir).filter((f) => f.endsWith(".sh")); // if no --test specified, run them all
 
@@ -73,7 +72,9 @@ for (const outputLanguage of Object.keys(converters)) {
 
 for (const fileName of testFileNames) {
   const inputFilePath = path.resolve(curlCommandsDir, fileName);
-  const inputFileContents = fs.readFileSync(inputFilePath, "utf8");
+  const inputFileContents = fs
+    .readFileSync(inputFilePath, "utf8")
+    .replace(/\r\n/g, "\n");
 
   for (const outputLanguage of languages) {
     const converter = converters[outputLanguage];
@@ -81,7 +82,7 @@ for (const fileName of testFileNames) {
     const filePath = path.resolve(
       fixturesDir,
       outputLanguage,
-      fileName.replace(/\.sh$/, converter.extension)
+      fileName.replace(/\.sh$/, converter.extension),
     );
     const testName = fileName.replace(/_/g, " ").replace(/\.sh$/, "");
     const fullTestName = converter.name + ": " + testName;
@@ -96,8 +97,9 @@ for (const fileName of testFileNames) {
         actual = converter.converter(inputFileContents);
       } catch (e) {
         console.error(
-          "Failed converting " + fileName + " to " + converter.name + ":"
+          "Failed converting " + fileName + " to " + converter.name + ":",
         );
+        console.error(inputFileContents);
         console.error(e);
         process.exit(1);
       }

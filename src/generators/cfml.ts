@@ -1,95 +1,99 @@
-import * as util from "../util.js";
-import type { Request, Warnings } from "../util.js";
+import { Word } from "../shell/Word.js";
+import { parse, getFirst, COMMON_SUPPORTED_ARGS } from "../parse.js";
+import type { Request, Warnings } from "../parse.js";
 
-import jsesc from "jsesc";
+import { esc as jsesc } from "./javascript/javascript.js";
 
-const supportedArgs = new Set([
-  "url",
-  "request",
-  "user-agent",
-  "cookie",
-  "data",
-  "data-raw",
-  "data-ascii",
-  "data-binary",
-  "data-urlencode",
-  "json",
-  "referer",
+export const supportedArgs = new Set([
+  ...COMMON_SUPPORTED_ARGS,
   "form",
   "form-string",
-  "get",
-  "header",
-  "head",
-  "no-head",
-  "user",
-  "proxy-user",
-  "proxy",
   "max-time",
+  "proxy",
+  "proxy-user",
 ]);
 
-const quote = (str: string): string => {
-  return jsesc(str, { quotes: "single" }).replace(/"/g, '""');
-};
+function repr(w: Word | string): string {
+  if (typeof w !== "string" && !w.isString()) {
+    // TODO: warn
+  }
+  let s = w.toString();
+  let quote: "'" | '"' = '"';
+  if (s.includes('"') && !s.includes("'")) {
+    quote = "'";
+  }
 
-export const _toCFML = (request: Request, warnings: Warnings = []): string => {
+  // TODO: CFML doesn't support backslash escapes such as \n
+  s = jsesc(s, quote).replace(/#/g, "##");
+  if (quote === '"') {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return "'" + s.replace(/'/g, "''") + "'";
+}
+
+export function _toCFML(requests: Request[], warnings: Warnings = []): string {
+  const request = getFirst(requests, warnings);
+
   let cfmlCode = "";
 
   cfmlCode += "httpService = new http();\n";
-  cfmlCode += 'httpService.setUrl("' + quote(request.url as string) + '");\n';
-  cfmlCode += 'httpService.setMethod("' + quote(request.method) + '");\n';
+  cfmlCode += "httpService.setUrl(" + repr(request.urls[0].url) + ");\n";
+  cfmlCode += "httpService.setMethod(" + repr(request.urls[0].method) + ");\n";
 
   if (request.cookies) {
     for (const [headerName, headerValue] of request.cookies) {
       cfmlCode +=
-        'httpService.addParam(type="cookie", name="' +
-        quote(headerName) +
-        '", value="' +
-        quote(headerValue) +
-        '");\n';
+        'httpService.addParam(type="cookie", name=' +
+        repr(headerName) +
+        ", value=" +
+        repr(headerValue) +
+        ");\n";
     }
-    util.deleteHeader(request, "Cookie");
+    request.headers.delete("Cookie");
   }
 
-  if (request.headers && request.headers.length) {
+  if (request.headers.length) {
     for (const [headerName, headerValue] of request.headers) {
       cfmlCode +=
-        'httpService.addParam(type="header", name="' +
-        quote(headerName) +
-        '", value="' +
-        quote(headerValue as string) +
-        '");\n';
+        'httpService.addParam(type="header", name=' +
+        repr(headerName) +
+        ", value=" +
+        repr(headerValue || new Word()) +
+        ");\n";
     }
   }
 
   if (request.timeout) {
     cfmlCode +=
-      "httpService.setTimeout(" + (parseInt(request.timeout) || 0) + ");\n";
+      "httpService.setTimeout(" +
+      (parseInt(request.timeout.toString(), 10) || 0) +
+      ");\n";
   }
 
-  if (request.auth) {
-    const [authUser, authPassword] = request.auth;
-    cfmlCode += 'httpService.setUsername("' + quote(authUser) + '");\n';
-    cfmlCode +=
-      'httpService.setPassword("' + quote(authPassword || "") + '");\n';
+  if (request.urls[0].auth) {
+    const [authUser, authPassword] = request.urls[0].auth;
+    cfmlCode += "httpService.setUsername(" + repr(authUser) + ");\n";
+    cfmlCode += "httpService.setPassword(" + repr(authPassword || "") + ");\n";
   }
 
   if (request.proxy) {
-    let proxy = request.proxy;
+    const p = request.proxy.toString();
+    let proxy = p;
     let proxyPort = "1080";
-    const proxyPart = (request.proxy as string).match(/:([0-9]+)/);
+    const proxyPart = p.match(/:([0-9]+)/);
     if (proxyPart) {
-      proxy = request.proxy.slice(0, proxyPart.index);
+      proxy = p.slice(0, proxyPart.index);
       proxyPort = proxyPart[1];
     }
 
-    cfmlCode += 'httpService.setProxyServer("' + quote(proxy) + '");\n';
-    cfmlCode += "httpService.setProxyPort(" + quote(proxyPort) + ");\n";
+    cfmlCode += "httpService.setProxyServer(" + repr(proxy) + ");\n";
+    cfmlCode += "httpService.setProxyPort(" + proxyPort.trim() + ");\n";
 
     if (request.proxyAuth) {
-      const [proxyUser, proxyPassword] = request.proxyAuth.split(/:(.*)/s, 2);
-      cfmlCode += 'httpService.setProxyUser("' + quote(proxyUser) + '");\n';
+      const [proxyUser, proxyPassword] = request.proxyAuth.split(":", 2);
+      cfmlCode += "httpService.setProxyUser(" + repr(proxyUser) + ");\n";
       cfmlCode +=
-        'httpService.setProxyPassword("' + quote(proxyPassword || "") + '");\n';
+        "httpService.setProxyPassword(" + repr(proxyPassword || "") + ");\n";
     }
   }
 
@@ -98,35 +102,36 @@ export const _toCFML = (request: Request, warnings: Warnings = []): string => {
       for (const m of request.multipartUploads) {
         if ("contentFile" in m) {
           cfmlCode +=
-            'httpService.addParam(type="file", name="' +
-            quote(m.name) +
-            '", file="#expandPath("' +
-            quote(m.contentFile) +
-            '")#");\n';
+            'httpService.addParam(type="file", name=' +
+            repr(m.name) +
+            ', file="#expandPath(' +
+            repr(m.contentFile) +
+            ')#");\n';
         } else {
           cfmlCode +=
-            'httpService.addParam(type="formfield", name="' +
-            quote(m.name) +
-            '", value="' +
-            quote(m.content) +
-            '");\n';
+            'httpService.addParam(type="formfield", name=' +
+            repr(m.name) +
+            ", value=" +
+            repr(m.content) +
+            ");\n";
         }
       }
     } else if (
       !request.isDataRaw &&
-      (request.data as string).charAt(0) === "@"
+      request.data &&
+      request.data.charAt(0) === "@"
     ) {
       cfmlCode +=
         'httpService.addParam(type="body", value="#' +
         (request.isDataBinary ? "fileReadBinary" : "fileRead") +
-        '(expandPath("' +
-        quote((request.data as string).substring(1)) +
-        '"))#");\n';
+        "(expandPath(" +
+        repr(request.data.toString().substring(1)) +
+        '))#");\n';
     } else {
       cfmlCode +=
-        'httpService.addParam(type="body", value="' +
-        quote(request.data as string) +
-        '");\n';
+        'httpService.addParam(type="body", value=' +
+        repr(request.data!) +
+        ");\n";
     }
   }
 
@@ -134,17 +139,17 @@ export const _toCFML = (request: Request, warnings: Warnings = []): string => {
   cfmlCode += "writeDump(result);\n";
 
   return cfmlCode;
-};
+}
 
-export const toCFMLWarn = (
+export function toCFMLWarn(
   curlCommand: string | string[],
-  warnings: Warnings = []
-): [string, Warnings] => {
-  const request = util.parseCurlCommand(curlCommand, supportedArgs, warnings);
-  const cfml = _toCFML(request, warnings);
+  warnings: Warnings = [],
+): [string, Warnings] {
+  const requests = parse(curlCommand, supportedArgs, warnings);
+  const cfml = _toCFML(requests, warnings);
   return [cfml, warnings];
-};
+}
 
-export const toCFML = (curlCommand: string | string[]): string => {
+export function toCFML(curlCommand: string | string[]): string {
   return toCFMLWarn(curlCommand)[0];
-};
+}

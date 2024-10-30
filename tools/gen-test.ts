@@ -43,6 +43,14 @@ const argv = await yargs(hideBin(process.argv))
 const languages: Converter[] = Array.isArray(argv.language)
   ? argv.language
   : [argv.language];
+for (const language of languages) {
+  // Create the directory if it doesn't exist
+  const outDir = path.resolve(curlCommandDir, "..", language);
+  if (!fs.existsSync(outDir)) {
+    console.error("creating directory " + outDir);
+    fs.mkdirSync(outDir);
+  }
+}
 
 if (argv.all && argv._.length) {
   console.error("--all passed, ignoring names of test files");
@@ -53,28 +61,14 @@ const inFiles =
     ? fs.readdirSync(curlCommandDir).filter((p) => p.endsWith(".sh"))
     : argv._;
 const inPaths = inFiles.map((infile) => {
-  infile = infile.toString();
-  // check that all files exist and add '.sh' to them if needed
-  const inPath = path.parse(infile);
-
-  if (inPath.ext && inPath.ext !== ".sh") {
-    console.error(
-      "unexpected file extension '" +
-        inPath.ext +
-        "' for " +
-        infile +
-        ". command_file should have no extension " +
-        "or end with '.sh'"
-    );
+  // Remove path and file extension
+  const filename = path.parse(infile.toString()).name;
+  const testfile = path.join(curlCommandDir, filename + ".sh");
+  if (!fs.existsSync(testfile)) {
+    console.error("no such file: " + testfile);
     process.exit();
   }
-  inPath.dir = inPath.dir ? path.resolve(inPath.dir) : curlCommandDir;
-  const fullPath = path.join(inPath.dir, inPath.name + ".sh");
-  if (!fs.existsSync(fullPath)) {
-    console.error("no such file: " + fullPath);
-    process.exit();
-  }
-  return fullPath;
+  return testfile;
 });
 
 const printEachFile =
@@ -87,8 +81,12 @@ for (const inPath of inPaths) {
     const newFilename = path
       .basename(inPath)
       .replace(/\.sh$/, converter.extension);
-    // TODO: make directory when doesn't exist? happens when adding a new generator
-    const outPath = path.resolve(inPath, "../..", language, newFilename);
+    const outDir = path.resolve(inPath, "../..", language);
+    if (!fs.existsSync(outDir)) {
+      console.error("creating directory " + outDir);
+      fs.mkdirSync(outDir);
+    }
+    const outPath = path.join(outDir, newFilename);
 
     let code;
     try {
@@ -109,20 +107,23 @@ for (const inPath of inPaths) {
       continue;
     }
 
+    const orig = fs.existsSync(outPath) ? fs.readFileSync(outPath, "utf8") : "";
     fs.writeFileSync(outPath, code);
-    if (printEachFile) {
-      console.error("wrote to", outPath);
-    } else {
-      total += 1;
+    if (orig !== code) {
+      if (printEachFile) {
+        console.error("wrote to " + path.relative(fixturesDir, outPath));
+      } else {
+        total += 1;
+      }
     }
   }
 }
 if (!printEachFile) {
-  console.error("wrote", total, "file" + (total === 1 ? "" : "s"));
+  console.error("wrote " + total + " file" + (total === 1 ? "" : "s"));
 }
 
-if (inPaths.length && languages.length) {
-  console.error(
-    "Please carefully check all the output for correctness before committing."
-  );
-}
+// if (inPaths.length && languages.length) {
+//   console.error(
+//     "Please carefully check all the output for correctness before committing."
+//   );
+// }

@@ -1,7 +1,9 @@
-require(httr)
+library(httr)
 
 headers = c(
-  `Content-Type` = 'application/x-www-form-urlencoded'
+  `Content-Type` = "application/x-www-form-urlencoded"
 )
 
-res <- httr::POST(url = 'http://localhost:28139', httr::add_headers(.headers=headers))
+data = ""
+
+res <- httr::POST(url = "http://localhost:28139", httr::add_headers(.headers=headers), body = data)

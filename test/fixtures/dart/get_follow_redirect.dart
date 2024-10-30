@@ -1,8 +1,11 @@
 import 'package:http/http.dart' as http;
 
 void main() async {
-  var url = Uri.parse('http://localhost:28139');
-  var res = await http.get(url);
-  if (res.statusCode != 200) throw Exception('http.get error: statusCode= ${res.statusCode}');
+  final url = Uri.parse('http://localhost:28139');
+
+  final res = await http.get(url);
+  final status = res.statusCode;
+  if (status != 200) throw Exception('http.get error: statusCode= $status');
+
   print(res.body);
 }

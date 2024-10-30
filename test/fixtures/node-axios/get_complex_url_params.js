@@ -1,4 +1,4 @@
-const axios = require('axios');
+import axios from 'axios';
 
 const params = new URLSearchParams();
 params.append('page', '1');
@@ -44,5 +44,5 @@ params.append('isfd', '');
 params.append('stopover', '');
 
 const response = await axios.get('http://localhost:28139/house-sitting/', {
-    params: params
+  params: params
 });

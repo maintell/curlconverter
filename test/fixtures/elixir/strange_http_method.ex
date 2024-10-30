@@ -1,10 +1,10 @@
 request = %HTTPoison.Request{
   method: :what,
   url: "http://localhost:28139",
-  options: [],
+  body: "",
   headers: [],
-  params: [],
-  body: ""
+  options: [],
+  params: []
 }
 
 response = HTTPoison.request(request)

@@ -1,7 +1,7 @@
 import 'package:http/http.dart' as http;
 
 void main() async {
-  var headers = {
+  final headers = {
     'Origin': 'http://www.realtor.ca',
     'Accept-Encoding': 'gzip, deflate',
     'Accept-Language': 'en-US,en;q=0.8',
@@ -12,10 +12,35 @@ void main() async {
     'Connection': 'keep-alive',
   };
 
-  var data = 'CultureId=1&ApplicationId=1&RecordsPerPage=200&MaximumResults=200&PropertyTypeId=300&TransactionTypeId=2&StoreyRange=0-0&BuildingTypeId=1&BedRange=0-0&BathRange=0-0&LongitudeMin=-79.3676805496215&LongitudeMax=-79.27300930023185&LatitudeMin=43.660358732823845&LatitudeMax=43.692390574029936&SortOrder=A&SortBy=1&viewState=m&Longitude=-79.4107246398925&Latitude=43.6552047278685&ZoomLevel=13&CurrentPage=1';
+  final data = {
+    'CultureId': '1',
+    'ApplicationId': '1',
+    'RecordsPerPage': '200',
+    'MaximumResults': '200',
+    'PropertyTypeId': '300',
+    'TransactionTypeId': '2',
+    'StoreyRange': '0-0',
+    'BuildingTypeId': '1',
+    'BedRange': '0-0',
+    'BathRange': '0-0',
+    'LongitudeMin': '-79.3676805496215',
+    'LongitudeMax': '-79.27300930023185',
+    'LatitudeMin': '43.660358732823845',
+    'LatitudeMax': '43.692390574029936',
+    'SortOrder': 'A',
+    'SortBy': '1',
+    'viewState': 'm',
+    'Longitude': '-79.4107246398925',
+    'Latitude': '43.6552047278685',
+    'ZoomLevel': '13',
+    'CurrentPage': '1',
+  };
 
-  var url = Uri.parse('http://localhost:28139/api/Listing.svc/PropertySearch_Post');
-  var res = await http.post(url, headers: headers, body: data);
-  if (res.statusCode != 200) throw Exception('http.post error: statusCode= ${res.statusCode}');
+  final url = Uri.parse('http://localhost:28139/api/Listing.svc/PropertySearch_Post');
+
+  final res = await http.post(url, headers: headers, body: data);
+  final status = res.statusCode;
+  if (status != 200) throw Exception('http.post error: statusCode= $status');
+
   print(res.body);
 }

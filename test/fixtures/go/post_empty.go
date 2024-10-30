@@ -2,14 +2,16 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
+	"strings"
 )
 
 func main() {
 	client := &http.Client{}
-	req, err := http.NewRequest("POST", "http://localhost:28139", nil)
+	var data = strings.NewReader(``)
+	req, err := http.NewRequest("POST", "http://localhost:28139", data)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -19,7 +21,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer resp.Body.Close()
-	bodyText, err := ioutil.ReadAll(resp.Body)
+	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -1,10 +1,9 @@
 import 'package:http/http.dart' as http;
 
 void main() async {
-  var params = {
+  final params = {
     'page': '1',
-    'available': '',
-    'available': '1',
+    'available': ['', '1'],
     'location': '0',
     'city[id]': '0',
     'city[locality]': '',
@@ -44,10 +43,13 @@ void main() async {
     'isfd': '',
     'stopover': '',
   };
-  var query = params.entries.map((p) => '${p.key}=${p.value}').join('&');
 
-  var url = Uri.parse('http://localhost:28139/house-sitting/?$query');
-  var res = await http.get(url);
-  if (res.statusCode != 200) throw Exception('http.get error: statusCode= ${res.statusCode}');
+  final url = Uri.parse('http://localhost:28139/house-sitting/')
+      .replace(queryParameters: params);
+
+  final res = await http.get(url);
+  final status = res.statusCode;
+  if (status != 200) throw Exception('http.get error: statusCode= $status');
+
   print(res.body);
 }

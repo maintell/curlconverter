@@ -1,9 +1,10 @@
 import fetch from 'node-fetch';
 
 fetch('http://localhost:28139/', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    body: 'foo=bar&foo=&foo=barbar'
+  method: 'POST',
+  body: new URLSearchParams([
+    ['foo', 'bar'],
+    ['foo', ''],
+    ['foo', 'barbar']
+  ])
 });

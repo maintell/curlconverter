@@ -1,4 +1,9 @@
-HttpClient client = new HttpClient();
+using System.Net.Http;
+
+HttpClientHandler handler = new HttpClientHandler();
+handler.AutomaticDecompression = DecompressionMethods.All;
+
+HttpClient client = new HttpClient(handler);
 
 HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Options, "http://localhost:28139/api/tunein/queue-and-play?deviceSerialNumber=xxx&deviceType=xxx&guideId=s56876&contentType=station&callSign=&mediaOwnerCustomerId=xxx");
 

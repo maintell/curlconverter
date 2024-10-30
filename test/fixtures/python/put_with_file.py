@@ -5,6 +5,6 @@ headers = {
 }
 
 with open('new_file') as f:
-    data = f.read().replace('\n', '')
+    data = f.read().replace('\n', '').replace('\r', '').encode()
 
 response = requests.put('http://localhost:28139/upload', headers=headers, data=data)
